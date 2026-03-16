@@ -364,10 +364,6 @@
       font-size: 0.57rem; letter-spacing: 0.07em;
       color: var(--c-muted); margin-top: 3px;
     }
-    .note-item__audio {
-      width: 100%; margin-top: 7px; height: 22px;
-      accent-color: var(--c-blue);
-    }
     .note-item__delete-btn {
       position: absolute; top: 8px; right: 6px;
       background: none; border: none; cursor: pointer;
@@ -1411,36 +1407,26 @@ function uid() {
 function saveNote() {
   const text  = transcript.value.trim();
   const title = noteTitle.value.trim() || 'Nota sin título';
-  if (!text && !audioURL && !audioBlob) { showToast('Nada que guardar.'); return; }
-  if (audioBlob) {
-    const reader = new FileReader();
-    reader.onloadend = () => persistNote(title, text, reader.result);
-    reader.readAsDataURL(audioBlob);
-  } else {
-    const existingAudio = activeNoteId
-      ? (notes.find(n => n.id === activeNoteId) || {}).audioData || null
-      : null;
-    persistNote(title, text, existingAudio);
-  }
+  if (!text) { showToast('Nada que guardar.'); return; }
+  persistNote(title, text);
 }
 
-function persistNote(title, text, audioData) {
+function persistNote(title, text) {
   if (activeNoteId) {
     const idx = notes.findIndex(n => n.id === activeNoteId);
     if (idx !== -1) {
-      notes[idx] = { ...notes[idx], title, text, audioData, updatedAt: Date.now() };
+      notes[idx] = { ...notes[idx], title, text, updatedAt: Date.now() };
       showToast('Nota actualizada ✓');
     }
   } else {
-    const note = { id: uid(), title, text, audioData, createdAt: Date.now() };
+    const note = { id: uid(), title, text, createdAt: Date.now() };
     notes.unshift(note);
     activeNoteId = note.id;
     showToast('Nota guardada ✓');
   }
   localStorage.setItem('voznota_notes', JSON.stringify(notes));
   renderNotes(); renderNotesMobile();
-  audioBlob = null;
-  audioURL  = null;
+  audioBlob = null; audioURL = null;
 }
 
 function loadNote(id) {
@@ -1480,7 +1466,6 @@ function buildNoteItem(note, container) {
   item.innerHTML = `
     <div class="note-item__title">${esc(note.title)}</div>
     <div class="note-item__meta">${dateStr} · ${timeStr}</div>
-    ${note.audioData ? `<audio class="note-item__audio" controls src="${note.audioData}"></audio>` : ''}
     <button class="note-item__delete-btn" title="Eliminar">✕</button>
   `;
   item.addEventListener('click', e => {
@@ -1558,10 +1543,33 @@ btnSave.addEventListener('click', saveNote);
 btnCopy.addEventListener('click', () => {
   const text = transcript.value.trim();
   if (!text) { showToast('No hay texto para copiar.'); return; }
-  navigator.clipboard.writeText(text).then(() => {
-    copyFeedback.classList.add('drawer__copy-feedback--visible');
-    setTimeout(() => copyFeedback.classList.remove('drawer__copy-feedback--visible'), 2000);
-  });
+
+  // Modern API with fallback for mobile browsers
+  const doCopy = () => {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text);
+    }
+    // Fallback: create a temporary textarea and use execCommand
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    try {
+      document.execCommand('copy');
+    } finally {
+      document.body.removeChild(ta);
+    }
+    return Promise.resolve();
+  };
+
+  doCopy()
+    .then(() => {
+      copyFeedback.classList.add('drawer__copy-feedback--visible');
+      setTimeout(() => copyFeedback.classList.remove('drawer__copy-feedback--visible'), 2000);
+    })
+    .catch(() => showToast('No se pudo copiar. Selecciona el texto manualmente.'));
 });
 
 btnClear.addEventListener('click', () => {
