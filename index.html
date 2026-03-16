@@ -390,11 +390,43 @@
     /* title row */
     .editor__header { flex-shrink: 0; margin-bottom: var(--sp-4); }
 
+    .editor__meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 5px;
+    }
+
     .editor__label {
       font-size: 0.58rem; letter-spacing: 0.18em;
       text-transform: uppercase; color: var(--c-blue); opacity: 0.8;
-      margin-bottom: 5px;
     }
+
+    /* editing badge */
+    .editor__label--editing {
+      color: var(--c-cyan);
+      opacity: 1;
+    }
+    .editor__label--editing::before {
+      content: '✎ ';
+    }
+
+    /* cancel edit button */
+    .editor__cancel-btn {
+      display: none;
+      font-family: var(--font-mono);
+      font-size: 0.58rem; letter-spacing: 0.1em;
+      text-transform: uppercase;
+      border: 1px solid var(--c-border);
+      background: none; color: var(--c-muted);
+      padding: 3px 9px; border-radius: var(--r-full);
+      cursor: pointer;
+      transition: background var(--t-base), color var(--t-base), border-color var(--t-base);
+    }
+    .editor__cancel-btn:hover {
+      background: var(--c-record); color: #fff; border-color: var(--c-record);
+    }
+    .editor__cancel-btn--visible { display: block; }
     .editor__title-input {
       font-family: var(--font-serif); font-size: 2rem;
       letter-spacing: -0.02em; color: var(--c-ink);
@@ -932,7 +964,10 @@
   <!-- ══ MAIN EDITOR ══ -->
   <main class="editor">
     <div class="editor__header">
-      <div class="editor__label">Nota activa</div>
+      <div class="editor__meta">
+        <div class="editor__label" id="editorLabel">Nueva nota</div>
+        <button class="editor__cancel-btn" id="btnCancelEdit" title="Cancelar edición">✕ Cancelar</button>
+      </div>
       <input class="editor__title-input" id="note-title" type="text" placeholder="Título de la nota…" spellcheck="false" />
     </div>
     <div class="editor__divider"></div>
@@ -1087,6 +1122,8 @@ const btnCopy         = document.getElementById('btnCopy');
 const btnClear        = document.getElementById('btnClear');
 const btnPolish       = document.getElementById('btnPolish');
 const copyFeedback    = document.getElementById('copyFeedback');
+const editorLabel     = document.getElementById('editorLabel');
+const btnCancelEdit   = document.getElementById('btnCancelEdit');
 const searchInput     = document.getElementById('searchInput');
 const searchInputMobile = document.getElementById('searchInputMobile');
 const canvas          = document.getElementById('waveform');
@@ -1425,17 +1462,40 @@ function persistNote(title, text) {
     showToast('Nota guardada ✓');
   }
   localStorage.setItem('voznota_notes', JSON.stringify(notes));
+  setEditMode(true, title);
   renderNotes(); renderNotesMobile();
   audioBlob = null; audioURL = null;
 }
 
+/* ── Edit mode UI helper ── */
+function setEditMode(editing, title) {
+  if (editing) {
+    editorLabel.textContent = `Editando: ${title || 'nota'}`;
+    editorLabel.classList.add('editor__label--editing');
+    btnCancelEdit.classList.add('editor__cancel-btn--visible');
+    btnSave.textContent = '💾 Guardar cambios';
+  } else {
+    editorLabel.textContent = 'Nueva nota';
+    editorLabel.classList.remove('editor__label--editing');
+    btnCancelEdit.classList.remove('editor__cancel-btn--visible');
+    btnSave.textContent = '💾 Guardar nota';
+  }
+}
+
+btnCancelEdit.addEventListener('click', () => {
+  clearEditor();
+  renderNotes();
+  renderNotesMobile();
+});
+
 function loadNote(id) {
   const note = notes.find(n => n.id === id);
   if (!note) return;
-  activeNoteId    = id;
-  noteTitle.value = note.title;
+  activeNoteId     = id;
+  noteTitle.value  = note.title;
   transcript.value = note.text || '';
   finalTranscript  = note.text || '';
+  setEditMode(true, note.title);
   renderNotes(); renderNotesMobile();
   onNoteSelected();
 }
@@ -1454,6 +1514,7 @@ function clearEditor() {
   finalTranscript  = '';
   audioBlob = null;
   audioURL  = null;
+  setEditMode(false);
 }
 
 function buildNoteItem(note, container) {
@@ -1575,8 +1636,6 @@ btnCopy.addEventListener('click', () => {
 btnClear.addEventListener('click', () => {
   if (isRecording) stopRecording();
   clearEditor();
-  renderNotes();
-  renderNotesMobile();
   closeAllDrawers();
 });
 
