@@ -1,0 +1,1795 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Graba, transcribe y organiza tus notas de voz con ayuda de IA." />
+  <meta name="theme-color" content="#2563eb" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="VozNota" />
+  <link rel="apple-touch-icon" />
+  <link rel="manifest" id="pwa-manifest" />
+  <title>VozNota — Anotador de Audio</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet" />
+  <style>
+    /* ============================================================
+       RESET
+    ============================================================ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* ============================================================
+       DESIGN TOKENS
+    ============================================================ */
+    :root {
+      /* ── Blue palette — light ── */
+      --c-bg:          #f0f4ff;       /* page background */
+      --c-surface:     #ffffff;       /* cards, sidebars */
+      --c-surface-alt: #e8eeff;       /* hover/alt rows */
+      --c-border:      rgba(37,99,235,0.15);
+      --c-shadow:      rgba(37,99,235,0.12);
+      --c-overlay:     rgba(15,23,85,0.45);
+
+      --c-ink:         #0f1755;       /* primary text */
+      --c-muted:       #5b6fa8;       /* secondary text */
+
+      --c-blue:        #2563eb;       /* primary accent */
+      --c-blue-dim:    #1d4ed8;
+      --c-blue-light:  #bfdbfe;
+      --c-cyan:        #06b6d4;       /* secondary accent */
+      --c-indigo:      #4f46e5;       /* tertiary */
+      --c-green:       #10b981;       /* success */
+
+      --c-record:      #e11d48;       /* record button */
+      --c-record-ring: rgba(225,29,72,0.35);
+
+      /* ── Typography ── */
+      --font-serif: 'DM Serif Display', serif;
+      --font-mono:  'DM Mono', monospace;
+
+      /* ── Spacing ── */
+      --sp-1:  4px;  --sp-2:  8px;  --sp-3: 12px;
+      --sp-4: 16px;  --sp-5: 20px;  --sp-6: 24px;
+      --sp-8: 32px;  --sp-10:40px;  --sp-12:48px;
+
+      /* ── Layout ── */
+      --sidebar-w:          300px;
+      --sidebar-w-collapsed: 52px;
+      --actions-w:           260px;
+      --header-h:             60px;
+
+      /* ── Radius ── */
+      --r-sm:  4px;  --r-md: 8px;  --r-lg: 16px;  --r-full: 9999px;
+
+      /* ── Transitions ── */
+      --t-fast:  0.15s ease;
+      --t-base:  0.2s ease;
+      --t-slow:  0.3s cubic-bezier(.4,0,.2,1);
+    }
+
+    [data-theme="dark"] {
+      --c-bg:          #0a0e2a;
+      --c-surface:     #111535;
+      --c-surface-alt: #1a2050;
+      --c-border:      rgba(99,149,255,0.12);
+      --c-shadow:      rgba(0,0,0,0.5);
+      --c-overlay:     rgba(0,0,10,0.65);
+
+      --c-ink:         #e2e8ff;
+      --c-muted:       #7b8ec8;
+
+      --c-blue:        #4f8fff;
+      --c-blue-dim:    #3b7fe8;
+      --c-blue-light:  #1e3a6e;
+      --c-cyan:        #22d3ee;
+      --c-indigo:      #818cf8;
+      --c-green:       #34d399;
+
+      --c-record:      #fb7185;
+      --c-record-ring: rgba(251,113,133,0.35);
+    }
+
+    /* ============================================================
+       BASE
+    ============================================================ */
+    html, body {
+      height: 100%;
+      background: var(--c-bg);
+      color: var(--c-ink);
+      font-family: var(--font-mono);
+      overflow: hidden;
+      transition: background var(--t-slow), color var(--t-slow);
+    }
+
+    /* subtle grid texture */
+    body::before {
+      content: '';
+      position: fixed; inset: 0; pointer-events: none; z-index: 0;
+      background-image:
+        linear-gradient(var(--c-border) 1px, transparent 1px),
+        linear-gradient(90deg, var(--c-border) 1px, transparent 1px);
+      background-size: 40px 40px;
+      opacity: 0.4;
+    }
+
+    /* ============================================================
+       ROOT SHELL  (header + sidebar-left + main + sidebar-right)
+    ============================================================ */
+    .shell {
+      position: relative; z-index: 1;
+      display: grid;
+      grid-template-rows: var(--header-h) 1fr;
+      grid-template-columns: var(--sidebar-w) 1fr;
+      grid-template-areas:
+        "header  header"
+        "sidebar main  ";
+      height: 100vh;
+      overflow: hidden;      /* prevent any child from blowing out */
+      transition: grid-template-columns var(--t-slow);
+    }
+    .shell--collapsed {
+      grid-template-columns: var(--sidebar-w-collapsed) 1fr;
+    }
+
+    /* ============================================================
+       HEADER  (BEM: header)
+    ============================================================ */
+    .header {
+      grid-area: header;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 var(--sp-6);
+      background: var(--c-surface);
+      border-bottom: 1.5px solid var(--c-border);
+      box-shadow: 0 2px 12px var(--c-shadow);
+      z-index: 30;
+      transition: background var(--t-slow), border-color var(--t-slow);
+    }
+
+    .header__left {
+      display: flex;
+      align-items: center;
+      gap: var(--sp-3);
+    }
+
+    .header__toggle {
+      width: 36px; height: 36px;
+      border-radius: var(--r-md);
+      border: 1.5px solid var(--c-border);
+      background: none; cursor: pointer;
+      color: var(--c-muted);
+      font-size: 1rem;
+      display: flex; align-items: center; justify-content: center;
+      transition: background var(--t-base), color var(--t-base), border-color var(--t-base);
+    }
+    .header__toggle:hover { background: var(--c-blue); color: #fff; border-color: var(--c-blue); }
+    .shell--collapsed .header__toggle { color: var(--c-blue); }
+
+    .header__logo {
+      font-family: var(--font-serif);
+      font-size: 1.5rem;
+      letter-spacing: -0.02em;
+      line-height: 1;
+      color: var(--c-ink);
+    }
+    .header__logo em { font-style: italic; color: var(--c-blue); }
+
+    .header__tagline {
+      font-size: 0.58rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--c-muted);
+      opacity: 0.7;
+    }
+
+    .header__right {
+      display: flex;
+      align-items: center;
+      gap: var(--sp-3);
+    }
+
+    /* dark-mode pill */
+    .header__theme-btn {
+      display: flex; align-items: center; gap: var(--sp-2);
+      background: var(--c-surface-alt);
+      border: 1.5px solid var(--c-border);
+      border-radius: var(--r-full);
+      padding: 6px 14px;
+      cursor: pointer;
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--c-ink);
+      transition: background var(--t-base), color var(--t-base), border-color var(--t-base);
+    }
+    .header__theme-btn:hover { background: var(--c-blue); color: #fff; border-color: var(--c-blue); }
+
+    /* offline badge */
+    .header__offline {
+      display: none;
+      background: var(--c-record);
+      color: #fff;
+      font-size: 0.58rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      padding: 4px 10px;
+      border-radius: var(--r-full);
+    }
+    .header__offline--visible { display: block; }
+
+    /* ============================================================
+       LEFT SIDEBAR  (BEM: sidebar)
+    ============================================================ */
+    .sidebar {
+      grid-area: sidebar;
+      background: var(--c-surface);
+      border-right: 1.5px solid var(--c-border);
+      display: flex;
+      flex-direction: column;
+      padding: var(--sp-5) var(--sp-4);
+      overflow: hidden;
+      height: 100%;          /* fill grid row */
+      min-height: 0;         /* allow flex children to shrink */
+      transition:
+        background var(--t-slow),
+        border-color var(--t-slow),
+        padding var(--t-slow);
+    }
+
+    .shell--collapsed .sidebar {
+      padding: var(--sp-5) var(--sp-2);
+      align-items: center;
+    }
+
+    /* ── collapsed icon strip ── */
+    .sidebar__icons {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: var(--sp-4);
+      margin-top: var(--sp-4);
+    }
+    .shell--collapsed .sidebar__icons { display: flex; }
+
+    .sidebar__icon-btn {
+      width: 36px; height: 36px;
+      border-radius: var(--r-md);
+      border: 1.5px solid var(--c-border);
+      background: none; cursor: pointer;
+      color: var(--c-muted); font-size: 1rem;
+      display: flex; align-items: center; justify-content: center;
+      transition: background var(--t-base), color var(--t-base);
+    }
+    .sidebar__icon-btn:hover { background: var(--c-blue); color: #fff; border-color: var(--c-blue); }
+
+    /* ── inner (hides when collapsed) ── */
+    .sidebar__inner {
+      opacity: 1;
+      transition: opacity var(--t-base);
+      min-width: 0;          /* allow shrinking */
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;      /* clip, let list scroll */
+      min-height: 0;         /* crucial for nested flex scroll */
+      gap: var(--sp-3);
+    }
+    .shell--collapsed .sidebar__inner { opacity: 0; pointer-events: none; }
+
+    /* search */
+    .sidebar__search {
+      position: relative;
+    }
+    .sidebar__search-input {
+      width: 100%;
+      background: var(--c-surface-alt);
+      border: 1.5px solid var(--c-border);
+      border-radius: var(--r-md);
+      padding: 8px 10px 8px 32px;
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      color: var(--c-ink);
+      outline: none;
+      transition: border-color var(--t-base), background var(--t-slow);
+    }
+    .sidebar__search-input:focus { border-color: var(--c-blue); background: var(--c-surface); }
+    .sidebar__search-input::placeholder { color: var(--c-muted); opacity: 0.6; }
+    .sidebar__search-icon {
+      position: absolute; left: 9px; top: 50%; transform: translateY(-50%);
+      font-size: 0.75rem; color: var(--c-muted); pointer-events: none;
+    }
+
+    /* notes label */
+    .sidebar__notes-label {
+      font-size: 0.58rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--c-muted);
+      padding: 0 var(--sp-1);
+    }
+
+    /* notes list */
+    .sidebar__notes-list {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: var(--sp-2);
+      padding-right: 2px;
+    }
+    .sidebar__notes-list::-webkit-scrollbar { width: 3px; }
+    .sidebar__notes-list::-webkit-scrollbar-thumb {
+      background: var(--c-blue-light); border-radius: 2px;
+    }
+
+    /* empty state */
+    .notes-empty {
+      text-align: center;
+      padding: var(--sp-8) 0;
+      color: var(--c-muted);
+      font-size: 0.68rem;
+      line-height: 1.9;
+      opacity: 0.6;
+    }
+
+    /* ── Note item ── */
+    .note-item {
+      background: var(--c-surface-alt);
+      border: 1.5px solid var(--c-border);
+      border-radius: var(--r-md);
+      padding: 10px 12px;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      transition:
+        border-color var(--t-base),
+        transform var(--t-fast),
+        background var(--t-slow);
+    }
+    .note-item::before {
+      content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+      background: linear-gradient(180deg, var(--c-blue), var(--c-cyan));
+      transform: scaleY(0); transition: transform var(--t-base); transform-origin: bottom;
+    }
+    .note-item:hover { border-color: var(--c-blue); transform: translateX(3px); }
+    .note-item:hover::before, .note-item--active::before { transform: scaleY(1); }
+    .note-item--active {
+      border-color: var(--c-blue);
+      background: var(--c-surface);
+      box-shadow: 0 2px 12px var(--c-shadow);
+    }
+    .note-item__title {
+      font-family: var(--font-serif); font-size: 0.82rem;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      padding-right: 20px; color: var(--c-ink);
+    }
+    .note-item__meta {
+      font-size: 0.57rem; letter-spacing: 0.07em;
+      color: var(--c-muted); margin-top: 3px;
+    }
+    .note-item__audio {
+      width: 100%; margin-top: 7px; height: 22px;
+      accent-color: var(--c-blue);
+    }
+    .note-item__delete-btn {
+      position: absolute; top: 8px; right: 6px;
+      background: none; border: none; cursor: pointer;
+      color: var(--c-muted); opacity: 0.3; font-size: 0.75rem;
+      padding: 2px 4px;
+      transition: opacity var(--t-base), color var(--t-base);
+    }
+    .note-item:hover .note-item__delete-btn { opacity: 0.6; }
+    .note-item__delete-btn:hover { color: var(--c-record); opacity: 1 !important; }
+
+    /* ============================================================
+       MAIN EDITOR  (BEM: editor)
+    ============================================================ */
+    .editor {
+      grid-area: main;
+      display: flex;
+      flex-direction: column;
+      padding: var(--sp-8) var(--sp-10);
+      overflow: hidden;
+      height: 100%;
+      transition: padding var(--t-slow);
+    }
+
+    /* title row */
+    .editor__header { flex-shrink: 0; margin-bottom: var(--sp-4); }
+
+    .editor__label {
+      font-size: 0.58rem; letter-spacing: 0.18em;
+      text-transform: uppercase; color: var(--c-blue); opacity: 0.8;
+      margin-bottom: 5px;
+    }
+    .editor__title-input {
+      font-family: var(--font-serif); font-size: 2rem;
+      letter-spacing: -0.02em; color: var(--c-ink);
+      border: none; background: transparent; outline: none;
+      width: 100%; line-height: 1.2;
+    }
+    .editor__title-input::placeholder { color: var(--c-muted); opacity: 0.35; }
+
+    /* divider */
+    .editor__divider {
+      height: 1.5px; flex-shrink: 0;
+      background: linear-gradient(90deg, var(--c-blue), var(--c-cyan), transparent);
+      margin-bottom: var(--sp-5);
+      border-radius: var(--r-full);
+    }
+
+    /* ── Record centre zone ── */
+    .editor__record-zone {
+      display: flex; flex-direction: column;
+      align-items: center; gap: var(--sp-4);
+      padding: var(--sp-4) 0 var(--sp-5);
+      flex-shrink: 0;
+    }
+
+    .editor__waveform {
+      width: 100%; max-width: 480px; height: 52px; display: block;
+    }
+
+    .editor__record-controls {
+      display: flex; align-items: center; gap: var(--sp-5);
+    }
+
+    .editor__record-status {
+      font-size: 0.62rem; letter-spacing: 0.14em;
+      text-transform: uppercase; color: var(--c-record);
+      opacity: 0; transition: opacity var(--t-slow);
+    }
+    .editor__record-status--visible { opacity: 1; }
+
+    .editor__record-timer {
+      font-size: 1.8rem; font-weight: 300;
+      letter-spacing: 0.08em; font-variant-numeric: tabular-nums;
+      color: var(--c-ink); opacity: 0; transition: opacity var(--t-slow);
+    }
+    .editor__record-timer--visible { opacity: 1; }
+
+    /* ── Transcript (scrollable) ── */
+    .editor__transcript-area {
+      flex: 1; display: flex; flex-direction: column;
+      min-height: 0;
+      border-top: 1.5px solid var(--c-border);
+      padding-top: var(--sp-4);
+    }
+
+    .editor__transcript-label {
+      font-size: 0.57rem; letter-spacing: 0.16em;
+      text-transform: uppercase; color: var(--c-muted);
+      margin-bottom: var(--sp-3);
+      display: flex; align-items: center; gap: 8px;
+      flex-shrink: 0;
+    }
+    .editor__live-dot {
+      width: 7px; height: 7px; border-radius: var(--r-full);
+      background: var(--c-record); opacity: 0; transition: opacity var(--t-slow);
+    }
+    .editor__live-dot--live { opacity: 1; animation: blink 1s step-end infinite; }
+    @keyframes blink { 50% { opacity: 0; } }
+
+    .editor__transcript-scroll {
+      flex: 1; overflow-y: auto; min-height: 0; padding-right: 8px;
+    }
+    .editor__transcript-scroll::-webkit-scrollbar { width: 4px; }
+    .editor__transcript-scroll::-webkit-scrollbar-track { background: transparent; }
+    .editor__transcript-scroll::-webkit-scrollbar-thumb {
+      background: var(--c-blue-light); border-radius: 2px;
+    }
+    .editor__transcript-scroll::-webkit-scrollbar-thumb:hover {
+      background: var(--c-blue);
+    }
+
+    .editor__textarea {
+      width: 100%; height: 100%; min-height: 140px;
+      resize: none; border: none; outline: none;
+      background: transparent;
+      font-family: var(--font-mono); font-size: 0.92rem;
+      font-weight: 300; line-height: 1.9; letter-spacing: 0.01em;
+      color: var(--c-ink); transition: color var(--t-slow);
+    }
+    .editor__textarea::placeholder { color: var(--c-muted); opacity: 0.4; font-style: italic; }
+
+    /* ============================================================
+       RECORD BUTTON  (BEM: record-btn)
+    ============================================================ */
+    .record-btn {
+      width: 108px; height: 108px; border-radius: var(--r-full);
+      border: 3px solid var(--c-record);
+      background: transparent; cursor: pointer; position: relative;
+      outline: none; flex-shrink: 0;
+      transition: transform var(--t-base), box-shadow var(--t-base);
+    }
+    .record-btn::after {
+      content: ''; position: absolute; inset: 17px;
+      border-radius: var(--r-full); background: var(--c-record);
+      transition: border-radius 0.25s, inset 0.25s;
+    }
+    .record-btn:hover {
+      transform: scale(1.06);
+      box-shadow: 0 0 0 8px var(--c-record-ring), 0 10px 40px rgba(225,29,72,0.25);
+    }
+    .record-btn--recording { animation: pulse-rec 1.4s ease-out infinite; }
+    .record-btn--recording::after { inset: 26px; border-radius: 6px; }
+    .record-btn--paused::after { inset: 17px; border-radius: 3px; }
+
+    @keyframes pulse-rec {
+      0%   { box-shadow: 0 0 0 0 var(--c-record-ring); }
+      70%  { box-shadow: 0 0 0 22px rgba(225,29,72,0); }
+      100% { box-shadow: 0 0 0 0 rgba(225,29,72,0); }
+    }
+
+    /* ============================================================
+       PAUSE BUTTON  (BEM: pause-btn)
+    ============================================================ */
+    .pause-btn {
+      width: 42px; height: 42px; border-radius: var(--r-full);
+      border: 1.5px solid var(--c-border);
+      background: transparent; cursor: pointer;
+      color: var(--c-muted); font-size: 0.9rem;
+      display: none; align-items: center; justify-content: center;
+      transition: background var(--t-base), border-color var(--t-base), color var(--t-base);
+      outline: none;
+    }
+    .pause-btn--visible { display: flex; }
+    .pause-btn:hover { background: var(--c-blue); color: #fff; border-color: var(--c-blue); }
+
+    /* ============================================================
+       SHARED DRAWER  (BEM: drawer)
+       — used for BOTH sidebars identically
+    ============================================================ */
+    .drawer {
+      position: fixed; top: var(--header-h); bottom: 0;
+      width: 260px;
+      background: var(--c-surface);
+      border: 1.5px solid var(--c-border);
+      display: flex; flex-direction: column;
+      padding: var(--sp-5) var(--sp-5);
+      z-index: 25;
+      overflow-y: auto;
+      box-shadow: 0 8px 40px var(--c-shadow);
+      transition:
+        transform var(--t-slow),
+        background var(--t-slow),
+        border-color var(--t-slow);
+    }
+
+    /* left drawer */
+    .drawer--left {
+      left: 0;
+      border-right: 1.5px solid var(--c-border);
+      border-left: none;
+      border-top: none; border-bottom: none;
+      transform: translateX(-100%);
+    }
+    .drawer--left.drawer--open { transform: translateX(0); }
+
+    /* right drawer */
+    .drawer--right {
+      right: 0;
+      border-left: 1.5px solid var(--c-border);
+      border-right: none;
+      border-top: none; border-bottom: none;
+      transform: translateX(100%);
+    }
+    .drawer--right.drawer--open { transform: translateX(0); }
+
+    /* ── drawer header ── */
+    .drawer__header {
+      display: flex; align-items: center;
+      justify-content: space-between;
+      margin-bottom: var(--sp-5);
+      padding-bottom: var(--sp-4);
+      border-bottom: 1.5px solid var(--c-border);
+      flex-shrink: 0;
+    }
+    .drawer__title {
+      font-family: var(--font-serif); font-size: 1.05rem;
+      color: var(--c-ink); letter-spacing: -0.01em;
+    }
+    .drawer__close {
+      width: 30px; height: 30px; border-radius: var(--r-full);
+      border: 1.5px solid var(--c-border);
+      background: none; cursor: pointer; color: var(--c-muted);
+      font-size: 0.8rem;
+      display: flex; align-items: center; justify-content: center;
+      transition: background var(--t-base), color var(--t-base);
+    }
+    .drawer__close:hover { background: var(--c-record); color: #fff; border-color: var(--c-record); }
+
+    /* ── drawer section label ── */
+    .drawer__section {
+      font-size: 0.55rem; letter-spacing: 0.2em;
+      text-transform: uppercase; color: var(--c-muted);
+      margin: var(--sp-5) 0 var(--sp-2);
+    }
+    .drawer__section:first-of-type { margin-top: 0; }
+
+    /* ── drawer actions stack ── */
+    .drawer__actions { display: flex; flex-direction: column; gap: var(--sp-2); }
+
+    /* ── drawer export buttons ── */
+    .drawer__export-opt {
+      display: flex; align-items: center; gap: var(--sp-3);
+      width: 100%; text-align: left;
+      font-family: var(--font-mono); font-size: 0.63rem;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      padding: 9px 12px;
+      border: 1.5px solid var(--c-border);
+      border-radius: var(--r-md);
+      background: transparent; color: var(--c-ink);
+      cursor: pointer;
+      transition: background var(--t-fast), border-color var(--t-fast), color var(--t-base);
+    }
+    .drawer__export-opt:hover {
+      background: var(--c-surface-alt);
+      border-color: var(--c-blue);
+      color: var(--c-blue);
+    }
+
+    /* copy feedback */
+    .drawer__copy-feedback {
+      font-size: 0.62rem; color: var(--c-green); letter-spacing: 0.1em;
+      opacity: 0; transition: opacity var(--t-slow);
+      text-align: center; margin-top: var(--sp-2);
+    }
+    .drawer__copy-feedback--visible { opacity: 1; }
+
+    /* ── left drawer search & notes inside drawer ── */
+    .drawer__search { position: relative; }
+    .drawer__search-input {
+      width: 100%;
+      background: var(--c-surface-alt);
+      border: 1.5px solid var(--c-border);
+      border-radius: var(--r-md);
+      padding: 8px 10px 8px 32px;
+      font-family: var(--font-mono); font-size: 0.7rem;
+      color: var(--c-ink); outline: none;
+      transition: border-color var(--t-base), background var(--t-slow);
+    }
+    .drawer__search-input:focus { border-color: var(--c-blue); background: var(--c-surface); }
+    .drawer__search-input::placeholder { color: var(--c-muted); opacity: 0.6; }
+    .drawer__search-icon {
+      position: absolute; left: 9px; top: 50%; transform: translateY(-50%);
+      font-size: 0.75rem; color: var(--c-muted); pointer-events: none;
+    }
+
+    .drawer__notes-label {
+      font-size: 0.55rem; letter-spacing: 0.2em;
+      text-transform: uppercase; color: var(--c-muted);
+      margin: var(--sp-4) 0 var(--sp-2);
+    }
+    .drawer__notes-list {
+      flex: 1; overflow-y: auto; min-height: 0;
+      display: flex; flex-direction: column; gap: var(--sp-2);
+    }
+    .drawer__notes-list::-webkit-scrollbar { width: 3px; }
+    .drawer__notes-list::-webkit-scrollbar-thumb {
+      background: var(--c-blue-light); border-radius: 2px;
+    }
+
+    /* ============================================================
+       DRAWER TAB (pull tab on the screen edge)
+    ============================================================ */
+    .drawer-tab {
+      position: fixed; top: calc(var(--header-h) + 50%);
+      width: 28px; height: 72px;
+      background: var(--c-surface);
+      border: 1.5px solid var(--c-border);
+      cursor: pointer;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 4px; z-index: 26;
+      font-size: 0.5rem; letter-spacing: 0.1em;
+      text-transform: uppercase; color: var(--c-muted);
+      writing-mode: vertical-rl; text-orientation: mixed;
+      transition:
+        background var(--t-base), color var(--t-base),
+        right var(--t-slow), left var(--t-slow),
+        box-shadow var(--t-base);
+    }
+    .drawer-tab:hover { background: var(--c-blue); color: #fff; border-color: var(--c-blue); }
+
+    .drawer-tab--left {
+      left: var(--sidebar-w);
+      border-left: none;
+      border-radius: 0 6px 6px 0;
+      box-shadow: 3px 0 10px var(--c-shadow);
+      transform: translateY(-50%);
+    }
+    .shell--collapsed .drawer-tab--left { left: var(--sidebar-w-collapsed); }
+
+    .drawer-tab--right {
+      right: 0;
+      border-right: none;
+      border-radius: 6px 0 0 6px;
+      box-shadow: -3px 0 10px var(--c-shadow);
+      transform: translateY(-50%);
+    }
+    .drawer-tab--right.drawer-tab--shifted { right: 260px; }
+
+    .drawer-tab__icon {
+      writing-mode: horizontal-tb; font-size: 0.9rem; margin-bottom: 3px;
+    }
+
+    /* ============================================================
+       SHARED OVERLAY  (behind any open drawer)
+    ============================================================ */
+    .overlay {
+      display: none; position: fixed; inset: 0;
+      background: var(--c-overlay); z-index: 24;
+      backdrop-filter: blur(2px);
+    }
+    .overlay--visible { display: block; }
+
+    /* ============================================================
+       BASE BUTTON  (BEM: btn) — used inside drawers
+    ============================================================ */
+    .btn {
+      font-family: var(--font-mono);
+      font-size: 0.65rem; letter-spacing: 0.1em; text-transform: uppercase;
+      border: 1.5px solid var(--c-border);
+      background: transparent; color: var(--c-ink);
+      padding: 9px 14px; cursor: pointer;
+      border-radius: var(--r-md);
+      transition:
+        background var(--t-base), color var(--t-base),
+        border-color var(--t-base), opacity var(--t-base);
+      white-space: nowrap; width: 100%; text-align: left;
+      display: flex; align-items: center; gap: var(--sp-2);
+    }
+    .btn:hover { background: var(--c-surface-alt); border-color: var(--c-blue); color: var(--c-blue); }
+
+    .btn--primary {
+      background: var(--c-blue); border-color: var(--c-blue); color: #fff;
+    }
+    .btn--primary:hover { background: var(--c-blue-dim); border-color: var(--c-blue-dim); color: #fff; }
+
+    .btn--ai {
+      background: linear-gradient(135deg, var(--c-indigo), var(--c-cyan));
+      border: none; color: #fff;
+    }
+    .btn--ai:hover { opacity: 0.88; color: #fff; border-color: transparent; }
+
+    .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+    .btn:disabled:hover { background: transparent; color: var(--c-ink); border-color: var(--c-border); }
+
+    /* AI spinner */
+    .ai-spinner {
+      display: inline-block; width: 11px; height: 11px;
+      border: 1.5px solid rgba(255,255,255,0.3);
+      border-top-color: #fff; border-radius: var(--r-full);
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ============================================================
+       TOAST
+    ============================================================ */
+    .toast {
+      position: fixed; bottom: 28px; left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: var(--c-ink); color: var(--c-bg);
+      font-size: 0.67rem; letter-spacing: 0.1em;
+      padding: 10px 22px; border-radius: var(--r-md);
+      opacity: 0; pointer-events: none; z-index: 999;
+      transition: opacity var(--t-slow), transform var(--t-slow);
+      box-shadow: 0 4px 20px var(--c-shadow);
+    }
+    .toast--visible { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    /* ============================================================
+       PWA INSTALL BANNER
+    ============================================================ */
+    .pwa-banner {
+      display: none; position: fixed; bottom: 0; left: 0; right: 0;
+      background: var(--c-surface);
+      border-top: 1.5px solid var(--c-border);
+      padding: var(--sp-4) var(--sp-6);
+      z-index: 990;
+      align-items: center; gap: var(--sp-4);
+      box-shadow: 0 -4px 20px var(--c-shadow);
+    }
+    .pwa-banner--visible { display: flex; }
+    .pwa-banner__text { flex: 1; font-size: 0.7rem; line-height: 1.5; }
+    .pwa-banner__title { font-family: var(--font-serif); font-size: 0.9rem; margin-bottom: 2px; }
+    .pwa-banner__sub { color: var(--c-muted); }
+    .pwa-banner__actions { display: flex; gap: var(--sp-2); }
+    .pwa-banner .btn { width: auto; }
+
+    /* ============================================================
+       MOBILE BAR  — single actions button
+    ============================================================ */
+    .mobile-bar {
+      display: none;
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      background: var(--c-surface);
+      border-top: 1.5px solid var(--c-border);
+      padding: var(--sp-3) var(--sp-5) max(var(--sp-3), env(safe-area-inset-bottom));
+      z-index: 30;
+      align-items: center;
+      justify-content: flex-end;   /* actions btn sits at the right */
+      gap: var(--sp-3);
+    }
+
+    .mobile-bar__nav-btn {
+      width: 44px; height: 44px;
+      border-radius: var(--r-md);
+      border: 1.5px solid var(--c-border);
+      background: none;
+      color: var(--c-muted); font-size: 1.1rem;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: background var(--t-base), color var(--t-base), border-color var(--t-base);
+    }
+    .mobile-bar__nav-btn:hover { background: var(--c-blue); color: #fff; border-color: var(--c-blue); }
+
+    /* ============================================================
+       RESPONSIVE
+    ============================================================ */
+
+    /* ── tablet landscape ≤ 1024 ── */
+    @media (max-width: 1024px) {
+      :root { --sidebar-w: 260px; }
+      .editor { padding: var(--sp-6) var(--sp-8); }
+      .editor__title-input { font-size: 1.75rem; }
+    }
+
+    /* ── tablet / large mobile ≤ 768 ── */
+    @media (max-width: 768px) {
+      .shell,
+      .shell--collapsed {
+        grid-template-columns: 1fr !important;
+        grid-template-areas: "header" "main" !important;
+      }
+
+      /* left sidebar becomes a full drawer */
+      .sidebar { display: none; }
+
+      /* drawer tabs hidden on mobile (use mobile-bar buttons instead) */
+      .drawer-tab { display: none; }
+
+      /* drawers go full-height from top (including header) */
+      .drawer {
+        top: 0;
+        width: min(300px, 88vw);
+      }
+      .drawer--left { transform: translateX(-100%); }
+      .drawer--left.drawer--open { transform: translateX(0); }
+      .drawer--right {
+        width: 100%;
+        top: auto; bottom: 0; right: 0; left: 0;
+        height: auto; max-height: 80dvh;
+        border-radius: 16px 16px 0 0;
+        border: 1.5px solid var(--c-border);
+        border-bottom: none;
+        transform: translateY(100%);
+      }
+      .drawer--right.drawer--open { transform: translateY(0); }
+
+      .editor { padding: var(--sp-5) var(--sp-4); padding-bottom: 70px; height: 100dvh; }
+      .editor__title-input { font-size: 1.5rem; }
+      .editor__textarea { font-size: 0.85rem; }
+
+      .mobile-bar { display: flex; }
+    }
+
+    /* ── small mobile ≤ 480 ── */
+    @media (max-width: 480px) {
+      .editor { padding: var(--sp-4) var(--sp-3); padding-bottom: 90px; }
+      .editor__title-input { font-size: 1.3rem; }
+      .record-btn { width: 90px; height: 90px; }
+      .record-btn::after { inset: 14px; }
+      .record-btn--recording::after { inset: 22px; }
+    }
+
+    /* ── wide desktop ≥ 1280 ── */
+    @media (min-width: 1280px) {
+      :root { --sidebar-w: 320px; }
+      .editor { padding: var(--sp-10) var(--sp-12); }
+      .editor__title-input { font-size: 2.25rem; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══ OVERLAY (behind any open drawer) ═══ -->
+<div class="overlay" id="overlay"></div>
+
+<!-- ═══════════════════════════════════════════
+     SHELL
+════════════════════════════════════════════ -->
+<div class="shell" id="shell">
+
+  <!-- ══ HEADER ══ -->
+  <header class="header">
+    <div class="header__left">
+      <button class="header__toggle" id="btnToggle" title="Notas">☰</button>
+      <div>
+        <div class="header__logo">Voz<em>Nota</em></div>
+        <div class="header__tagline">Anotador de audio</div>
+      </div>
+    </div>
+    <div class="header__right">
+      <div class="header__offline" id="offlineIndicator">Sin conexión</div>
+      <button class="header__theme-btn" id="btnTheme">🌙</button>
+    </div>
+  </header>
+
+  <!-- ══ LEFT SIDEBAR (desktop sticky) ══ -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar__icons">
+      <button class="sidebar__icon-btn" title="Buscar" onclick="document.getElementById('btnToggle').click()">🔍</button>
+      <button class="sidebar__icon-btn" title="Notas" onclick="document.getElementById('btnToggle').click()">📋</button>
+    </div>
+    <div class="sidebar__inner">
+      <div class="sidebar__search">
+        <span class="sidebar__search-icon">🔍</span>
+        <input class="sidebar__search-input" type="text" id="searchInput" placeholder="Buscar notas…" />
+      </div>
+      <p class="sidebar__notes-label">Notas guardadas</p>
+      <div class="sidebar__notes-list" id="notesList">
+        <div class="notes-empty">Aún no hay notas.<br/>Pulsa el botón rojo<br/>para grabar.</div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ══ MAIN EDITOR ══ -->
+  <main class="editor">
+    <div class="editor__header">
+      <div class="editor__label">Nota activa</div>
+      <input class="editor__title-input" id="note-title" type="text" placeholder="Título de la nota…" spellcheck="false" />
+    </div>
+    <div class="editor__divider"></div>
+
+    <!-- Central record zone -->
+    <div class="editor__record-zone">
+      <canvas class="editor__waveform" id="waveform"></canvas>
+      <div class="editor__record-controls">
+        <button class="record-btn" id="btnRecord" title="Grabar"></button>
+        <button class="pause-btn" id="btnPause" title="Pausar">⏸</button>
+      </div>
+      <div class="editor__record-status" id="recordStatus">● Grabando…</div>
+      <div class="editor__record-timer record-timer" id="timer">00:00</div>
+    </div>
+
+    <!-- Scrollable transcript -->
+    <div class="editor__transcript-area">
+      <div class="editor__transcript-label">
+        <span class="editor__live-dot" id="liveDot"></span>
+        Transcripción
+      </div>
+      <div class="editor__transcript-scroll">
+        <textarea
+          class="editor__textarea"
+          id="transcript"
+          placeholder="La transcripción del audio aparecerá aquí mientras hablas. También puedes escribir directamente…"
+          spellcheck="true"
+        ></textarea>
+      </div>
+    </div>
+  </main>
+
+</div><!-- /.shell -->
+
+
+<!-- ══════════════════════════════════════════
+     LEFT DRAWER  (notes, triggered on mobile)
+═══════════════════════════════════════════ -->
+<aside class="drawer drawer--left" id="drawerLeft">
+  <div class="drawer__header">
+    <span class="drawer__title">Mis notas</span>
+    <button class="drawer__close" id="btnDrawerLeftClose" title="Cerrar">✕</button>
+  </div>
+  <div class="drawer__search">
+    <span class="drawer__search-icon">🔍</span>
+    <input class="drawer__search-input" type="text" id="searchInputMobile" placeholder="Buscar notas…" />
+  </div>
+  <p class="drawer__notes-label">Guardadas</p>
+  <div class="drawer__notes-list" id="notesListMobile">
+    <div class="notes-empty">Aún no hay notas.<br/>Pulsa grabar para empezar.</div>
+  </div>
+</aside>
+
+<!-- ═════════════════════════════════════════
+     RIGHT DRAWER  (actions)
+═══════════════════════════════════════════ -->
+<aside class="drawer drawer--right" id="drawerRight">
+  <div class="drawer__header">
+    <span class="drawer__title">Acciones</span>
+    <button class="drawer__close" id="btnDrawerRightClose" title="Cerrar">✕</button>
+  </div>
+
+  <p class="drawer__section">Nota</p>
+  <div class="drawer__actions">
+    <button class="btn btn--primary" id="btnSave">💾 Guardar nota</button>
+    <button class="btn btn--ai"     id="btnPolish">✦ Pulir texto</button>
+    <button class="btn"             id="btnClear">＋ Nueva nota</button>
+  </div>
+
+  <p class="drawer__section">Copiar</p>
+  <div class="drawer__actions">
+    <button class="btn" id="btnCopy">⎘ Copiar texto</button>
+    <div class="drawer__copy-feedback" id="copyFeedback">Copiado ✓</div>
+  </div>
+
+  <p class="drawer__section">Exportar</p>
+  <div class="drawer__actions">
+    <button class="drawer__export-opt" data-fmt="txt">📄 Texto plano (.txt)</button>
+    <button class="drawer__export-opt" data-fmt="md">📝 Markdown (.md)</button>
+    <button class="drawer__export-opt" data-fmt="json">🗂 JSON (.json)</button>
+  </div>
+</aside>
+
+<!-- ═════════════════════════════════════════
+     DRAWER TABS (desktop pull-tabs)
+═══════════════════════════════════════════ -->
+<button class="drawer-tab drawer-tab--right" id="btnActionsTab" title="Acciones">
+  <span class="drawer-tab__icon">⚙</span>
+  Acciones
+</button>
+
+<!-- ══ MOBILE BOTTOM BAR ══ -->
+<div class="mobile-bar" id="mobileBar">
+  <button class="mobile-bar__nav-btn" id="btnMobileSave" title="Acciones">⚙ Acciones</button>
+</div>
+
+<!-- ══ PWA INSTALL BANNER ══ -->
+<div class="pwa-banner" id="pwaBanner">
+  <div class="pwa-banner__text">
+    <div class="pwa-banner__title">Instalar VozNota</div>
+    <div class="pwa-banner__sub">Úsala sin conexión, directamente desde tu pantalla de inicio.</div>
+  </div>
+  <div class="pwa-banner__actions">
+    <button class="btn btn--primary" id="btnInstall" style="width:auto">Instalar</button>
+    <button class="btn" id="btnInstallDismiss" style="width:auto">Ahora no</button>
+  </div>
+</div>
+
+<!-- ══ TOAST ══ -->
+<div class="toast" id="toast"></div>
+
+<script>
+/* ═══════════════════════════════════════
+   STATE
+═══════════════════════════════════════ */
+let notes          = JSON.parse(localStorage.getItem('voznota_notes') || '[]');
+let activeNoteId   = null;
+let mediaRecorder  = null;
+let audioChunks    = [];
+let audioBlob      = null;
+let audioURL       = null;
+let timerInterval  = null;
+let startTime      = null;
+let pausedTime     = 0;
+let isRecording    = false;
+let isPaused       = false;
+let recognition    = null;
+let finalTranscript = '';
+let analyser = null, dataArray = null, animFrame = null;
+let currentStream  = null;
+let deferredInstallPrompt = null;
+
+/* ═══════════════════════════════════════
+   DOM REFS
+═══════════════════════════════════════ */
+const shellEl         = document.getElementById('shell');
+const overlay         = document.getElementById('overlay');
+const btnToggle       = document.getElementById('btnToggle');
+const btnTheme        = document.getElementById('btnTheme');
+const btnRecord       = document.getElementById('btnRecord');
+const btnPause        = document.getElementById('btnPause');
+const recordStatus    = document.getElementById('recordStatus');
+const timerEl         = document.getElementById('timer');
+const transcript      = document.getElementById('transcript');
+const noteTitle       = document.getElementById('note-title');
+const liveDot         = document.getElementById('liveDot');
+const notesList       = document.getElementById('notesList');
+const notesListMobile = document.getElementById('notesListMobile');
+const toastEl         = document.getElementById('toast');
+const btnSave         = document.getElementById('btnSave');
+const btnCopy         = document.getElementById('btnCopy');
+const btnClear        = document.getElementById('btnClear');
+const btnPolish       = document.getElementById('btnPolish');
+const copyFeedback    = document.getElementById('copyFeedback');
+const searchInput     = document.getElementById('searchInput');
+const searchInputMobile = document.getElementById('searchInputMobile');
+const canvas          = document.getElementById('waveform');
+const ctx2d           = canvas.getContext('2d');
+const offlineIndicator = document.getElementById('offlineIndicator');
+const pwaBanner       = document.getElementById('pwaBanner');
+const btnInstall      = document.getElementById('btnInstall');
+const btnInstallDismiss = document.getElementById('btnInstallDismiss');
+// Mobile bar
+const btnMobileSave   = document.getElementById('btnMobileSave');
+// Drawers
+const drawerLeft      = document.getElementById('drawerLeft');
+const drawerRight     = document.getElementById('drawerRight');
+const btnDrawerLeftClose  = document.getElementById('btnDrawerLeftClose');
+const btnDrawerRightClose = document.getElementById('btnDrawerRightClose');
+const btnActionsTab   = document.getElementById('btnActionsTab');
+
+/* ═══════════════════════════════════════
+   1. THEME
+═══════════════════════════════════════ */
+function applyTheme(t) {
+  document.documentElement.setAttribute('data-theme', t);
+  btnTheme.textContent = t === 'dark' ? '☀️ Claro' : '🌙 Oscuro';
+  localStorage.setItem('voznota_theme', t);
+  drawIdle();
+}
+
+btnTheme.addEventListener('click', () => {
+  applyTheme(
+    document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'
+  );
+});
+
+applyTheme(localStorage.getItem('voznota_theme') || 'light');
+
+/* ═══════════════════════════════════════
+   2. DRAWERS — left (notes) & right (actions)
+═══════════════════════════════════════ */
+let sidebarCollapsed = localStorage.getItem('voznota_sidebar') === 'true';
+
+function isMobile() { return window.innerWidth <= 768; }
+
+/* ── Desktop left sidebar collapse ── */
+function applySidebar() {
+  if (isMobile()) {
+    shellEl.classList.remove('shell--collapsed');
+    return;
+  }
+  shellEl.classList.toggle('shell--collapsed', sidebarCollapsed);
+  localStorage.setItem('voznota_sidebar', sidebarCollapsed);
+}
+
+btnToggle.addEventListener('click', () => {
+  if (isMobile()) {
+    openDrawer('left');
+  } else {
+    sidebarCollapsed = !sidebarCollapsed;
+    applySidebar();
+  }
+});
+
+/* ── Generic drawer open/close ── */
+function openDrawer(side) {
+  closeAllDrawers();
+  if (side === 'left') {
+    drawerLeft.classList.add('drawer--open');
+    renderNotesMobile();
+  } else {
+    drawerRight.classList.add('drawer--open');
+    btnActionsTab.classList.add('drawer-tab--shifted');
+  }
+  overlay.classList.add('overlay--visible');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeAllDrawers() {
+  drawerLeft.classList.remove('drawer--open');
+  drawerRight.classList.remove('drawer--open');
+  btnActionsTab.classList.remove('drawer-tab--shifted');
+  overlay.classList.remove('overlay--visible');
+  document.body.style.overflow = '';
+}
+
+btnDrawerLeftClose.addEventListener('click', closeAllDrawers);
+btnDrawerRightClose.addEventListener('click', closeAllDrawers);
+overlay.addEventListener('click', closeAllDrawers);
+
+btnActionsTab.addEventListener('click', () => {
+  drawerRight.classList.contains('drawer--open')
+    ? closeAllDrawers()
+    : openDrawer('right');
+});
+
+/* ── Mobile buttons ── */
+btnMobileSave.addEventListener('click', () => openDrawer('right'));
+
+function onNoteSelected() {
+  if (isMobile()) closeAllDrawers();
+}
+
+applySidebar();
+window.addEventListener('resize', applySidebar);
+
+/* ═══════════════════════════════════════
+   3. SEARCH
+═══════════════════════════════════════ */
+function syncSearch(val) {
+  searchInput.value = val;
+  searchInputMobile.value = val;
+  renderNotes();
+  renderNotesMobile();
+}
+searchInput.addEventListener('input', () => syncSearch(searchInput.value));
+searchInputMobile.addEventListener('input', () => syncSearch(searchInputMobile.value));
+
+function getFilteredNotes() {
+  const q = searchInput.value.trim().toLowerCase();
+  if (!q) return notes;
+  return notes.filter(n =>
+    n.title.toLowerCase().includes(q) || (n.text || '').toLowerCase().includes(q)
+  );
+}
+
+/* ═══════════════════════════════════════
+   SPEECH RECOGNITION
+═══════════════════════════════════════ */
+function initRecognition() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) return null;
+  const r = new SR();
+  r.lang = 'es-ES';
+  r.interimResults = true;
+  r.continuous = true;
+  let silenceTimer = null;
+
+  function resetSilenceTimer() {
+    clearTimeout(silenceTimer);
+    silenceTimer = setTimeout(() => {
+      if (finalTranscript && !finalTranscript.endsWith('\n\n')) {
+        finalTranscript = finalTranscript.trimEnd() + '\n\n';
+        transcript.value = finalTranscript;
+      }
+    }, 1500);
+  }
+
+  r.onresult = e => {
+    let interim = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const t = e.results[i][0].transcript;
+      if (e.results[i].isFinal) finalTranscript += t + ' ';
+      else interim += t;
+    }
+    transcript.value = finalTranscript + interim;
+    resetSilenceTimer();
+  };
+
+  r.onerror = () => {};
+  r.onend = () => {
+    clearTimeout(silenceTimer);
+    if (isRecording && !isPaused) { try { r.start(); } catch(e) {} }
+  };
+  return r;
+}
+
+/* ═══════════════════════════════════════
+   WAVEFORM
+═══════════════════════════════════════ */
+function resizeCanvas() {
+  canvas.width  = canvas.offsetWidth;
+  canvas.height = canvas.offsetHeight;
+}
+
+function drawWaveform() {
+  resizeCanvas();
+  if (!analyser) { drawIdle(); return; }
+  analyser.getByteTimeDomainData(dataArray);
+  ctx2d.clearRect(0, 0, canvas.width, canvas.height);
+  ctx2d.strokeStyle = '#2563eb';
+  ctx2d.lineWidth = 1.5;
+  ctx2d.beginPath();
+  const sliceW = canvas.width / dataArray.length;
+  let x = 0;
+  for (let i = 0; i < dataArray.length; i++) {
+    const v = dataArray[i] / 128;
+    const y = v * canvas.height / 2;
+    i === 0 ? ctx2d.moveTo(x, y) : ctx2d.lineTo(x, y);
+    x += sliceW;
+  }
+  ctx2d.lineTo(canvas.width, canvas.height / 2);
+  ctx2d.stroke();
+  animFrame = requestAnimationFrame(drawWaveform);
+}
+
+function drawIdle() {
+  resizeCanvas();
+  ctx2d.clearRect(0, 0, canvas.width, canvas.height);
+  const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+  ctx2d.strokeStyle = dark ? 'rgba(99,149,255,0.25)' : 'rgba(37,99,235,0.18)';
+  ctx2d.lineWidth = 1;
+  ctx2d.beginPath();
+  ctx2d.moveTo(0, canvas.height / 2);
+  ctx2d.lineTo(canvas.width, canvas.height / 2);
+  ctx2d.stroke();
+}
+
+drawIdle();
+
+/* ═══════════════════════════════════════
+   TIMER
+═══════════════════════════════════════ */
+function formatTime(ms) {
+  const s = Math.floor(ms / 1000), m = Math.floor(s / 60);
+  return `${String(m).padStart(2,'0')}:${String(s % 60).padStart(2,'0')}`;
+}
+
+function updateTimers(str) {
+  timerEl.textContent = str;
+}
+
+/* ═══════════════════════════════════════
+   4. RECORDING
+═══════════════════════════════════════ */
+async function startRecording() {
+  try {
+    currentStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const source   = audioCtx.createMediaStreamSource(currentStream);
+    analyser       = audioCtx.createAnalyser();
+    analyser.fftSize = 512;
+    dataArray = new Uint8Array(analyser.frequencyBinCount);
+    source.connect(analyser);
+    drawWaveform();
+
+    mediaRecorder = new MediaRecorder(currentStream);
+    audioChunks   = [];
+    mediaRecorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
+    mediaRecorder.onstop = () => {
+      audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+      audioURL  = URL.createObjectURL(audioBlob);
+      if (!isRecording) {
+        currentStream.getTracks().forEach(t => t.stop());
+        cancelAnimationFrame(animFrame);
+        analyser = null;
+        drawIdle();
+      }
+    };
+    mediaRecorder.start(100);
+
+    finalTranscript = transcript.value;
+    recognition = initRecognition();
+    if (recognition) recognition.start();
+
+    startTime     = Date.now() - pausedTime;
+    timerInterval = setInterval(() => { updateTimers(formatTime(Date.now() - startTime)); }, 500);
+
+    isRecording = true;
+    isPaused    = false;
+
+    setRecordingUI('recording');
+  } catch(err) {
+    showToast('No se pudo acceder al micrófono.');
+  }
+}
+
+function pauseRecording() {
+  if (!isRecording || isPaused) return;
+  if (mediaRecorder && mediaRecorder.state === 'recording') mediaRecorder.pause();
+  if (recognition) { try { recognition.stop(); } catch(e) {} }
+  pausedTime = Date.now() - startTime;
+  clearInterval(timerInterval);
+  cancelAnimationFrame(animFrame);
+  isPaused = true;
+  setRecordingUI('paused');
+}
+
+function resumeRecording() {
+  if (!isRecording || !isPaused) return;
+  if (mediaRecorder && mediaRecorder.state === 'paused') mediaRecorder.resume();
+  if (recognition) { try { recognition.start(); } catch(e) {} }
+  startTime     = Date.now() - pausedTime;
+  timerInterval = setInterval(() => { updateTimers(formatTime(Date.now() - startTime)); }, 500);
+  drawWaveform();
+  isPaused = false;
+  setRecordingUI('recording');
+}
+
+function stopRecording() {
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+  if (recognition) { try { recognition.stop(); } catch(e) {} }
+  clearInterval(timerInterval);
+  cancelAnimationFrame(animFrame);
+  if (currentStream) { currentStream.getTracks().forEach(t => t.stop()); currentStream = null; }
+  analyser = null;
+  drawIdle();
+  isRecording = false;
+  isPaused    = false;
+  pausedTime  = 0;
+  setRecordingUI('idle');
+  updateTimers('00:00');
+}
+
+function setRecordingUI(state) {
+  btnRecord.classList.toggle('record-btn--recording', state === 'recording');
+  btnRecord.classList.toggle('record-btn--paused',    state === 'paused');
+  btnPause.classList.toggle('pause-btn--visible', state !== 'idle');
+  if (state !== 'idle') {
+    btnPause.textContent = state === 'paused' ? '▶' : '⏸';
+    btnPause.title = state === 'paused' ? 'Reanudar' : 'Pausar';
+  }
+  recordStatus.textContent = state === 'recording' ? '● Grabando…' : state === 'paused' ? '⏸ Pausado' : '';
+  recordStatus.classList.toggle('editor__record-status--visible', state !== 'idle');
+  timerEl.classList.toggle('editor__record-timer--visible', state !== 'idle');
+  liveDot.classList.toggle('editor__live-dot--live', state === 'recording');
+}
+
+btnRecord.addEventListener('click', () => { isRecording ? stopRecording() : startRecording(); });
+btnPause.addEventListener('click',  () => { isPaused ? resumeRecording() : pauseRecording(); });
+
+
+/* ═══════════════════════════════════════
+   NOTES CRUD
+═══════════════════════════════════════ */
+function uid() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2);
+}
+
+function saveNote() {
+  const text  = transcript.value.trim();
+  const title = noteTitle.value.trim() || 'Nota sin título';
+  if (!text && !audioURL && !audioBlob) { showToast('Nada que guardar.'); return; }
+  if (audioBlob) {
+    const reader = new FileReader();
+    reader.onloadend = () => persistNote(title, text, reader.result);
+    reader.readAsDataURL(audioBlob);
+  } else {
+    const existingAudio = activeNoteId
+      ? (notes.find(n => n.id === activeNoteId) || {}).audioData || null
+      : null;
+    persistNote(title, text, existingAudio);
+  }
+}
+
+function persistNote(title, text, audioData) {
+  if (activeNoteId) {
+    const idx = notes.findIndex(n => n.id === activeNoteId);
+    if (idx !== -1) {
+      notes[idx] = { ...notes[idx], title, text, audioData, updatedAt: Date.now() };
+      showToast('Nota actualizada ✓');
+    }
+  } else {
+    const note = { id: uid(), title, text, audioData, createdAt: Date.now() };
+    notes.unshift(note);
+    activeNoteId = note.id;
+    showToast('Nota guardada ✓');
+  }
+  localStorage.setItem('voznota_notes', JSON.stringify(notes));
+  renderNotes(); renderNotesMobile();
+  audioBlob = null;
+  audioURL  = null;
+}
+
+function loadNote(id) {
+  const note = notes.find(n => n.id === id);
+  if (!note) return;
+  activeNoteId    = id;
+  noteTitle.value = note.title;
+  transcript.value = note.text || '';
+  finalTranscript  = note.text || '';
+  renderNotes(); renderNotesMobile();
+  onNoteSelected();
+}
+
+function deleteNote(id) {
+  notes = notes.filter(n => n.id !== id);
+  localStorage.setItem('voznota_notes', JSON.stringify(notes));
+  if (activeNoteId === id) clearEditor();
+  renderNotes(); renderNotesMobile();
+}
+
+function clearEditor() {
+  activeNoteId     = null;
+  noteTitle.value  = '';
+  transcript.value = '';
+  finalTranscript  = '';
+  audioBlob = null;
+  audioURL  = null;
+}
+
+function buildNoteItem(note, container) {
+  const item    = document.createElement('div');
+  const isActive = note.id === activeNoteId;
+  item.className = 'note-item' + (isActive ? ' note-item--active' : '');
+  const date    = new Date(note.createdAt);
+  const dateStr = date.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' });
+  const timeStr = date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+  item.innerHTML = `
+    <div class="note-item__title">${esc(note.title)}</div>
+    <div class="note-item__meta">${dateStr} · ${timeStr}</div>
+    ${note.audioData ? `<audio class="note-item__audio" controls src="${note.audioData}"></audio>` : ''}
+    <button class="note-item__delete-btn" title="Eliminar">✕</button>
+  `;
+  item.addEventListener('click', e => {
+    if (e.target.classList.contains('note-item__delete-btn')) { deleteNote(note.id); return; }
+    if (e.target.tagName === 'AUDIO' || e.target.closest('audio')) return;
+    loadNote(note.id);
+  });
+  container.appendChild(item);
+}
+
+function renderNotes() {
+  const filtered = getFilteredNotes();
+  const emptyMsg = notes.length === 0
+    ? '<div class="notes-empty">Aún no hay notas.<br/>Pulsa el botón rojo<br/>para grabar.</div>'
+    : '<div class="notes-empty">Sin resultados.</div>';
+  if (filtered.length === 0) { notesList.innerHTML = emptyMsg; return; }
+  notesList.innerHTML = '';
+  filtered.forEach(note => buildNoteItem(note, notesList));
+}
+
+function renderNotesMobile() {
+  const filtered = getFilteredNotes();
+  const emptyMsg = notes.length === 0
+    ? '<div class="notes-empty">Aún no hay notas.<br/>Pulsa grabar para empezar.</div>'
+    : '<div class="notes-empty">Sin resultados.</div>';
+  if (filtered.length === 0) { notesListMobile.innerHTML = emptyMsg; return; }
+  notesListMobile.innerHTML = '';
+  filtered.forEach(note => buildNoteItem(note, notesListMobile));
+}
+
+function esc(t) {
+  return t
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/* ═══════════════════════════════════════
+   5. AI POLISH (local rules)
+═══════════════════════════════════════ */
+btnPolish.addEventListener('click', async () => {
+  const text = transcript.value.trim();
+  if (!text) { showToast('No hay texto para pulir.'); return; }
+  btnPolish.disabled = true;
+  btnPolish.innerHTML = '<span class="ai-spinner"></span>Puliendo…';
+  await new Promise(r => setTimeout(r, 500));
+  try {
+    let t = text;
+    t = t.charAt(0).toUpperCase() + t.slice(1);
+    t = t.replace(/([.!?…])\s+([a-záéíóúüñ])/g, (_, p, c) => p + ' ' + c.toUpperCase());
+    t = t.replace(/ {2,}/g, ' ');
+    t = t.trimEnd();
+    if (t && !/[.!?…]$/.test(t)) t += '.';
+    t = t.replace(/\n\n\n+/g, '\n\n');
+    transcript.value = t;
+    finalTranscript  = t;
+    showToast('✦ Texto pulido');
+  } catch(e) {
+    showToast('Error al pulir el texto.');
+  } finally {
+    btnPolish.disabled = false;
+    btnPolish.innerHTML = '✦ Pulir texto';
+  }
+});
+
+/* ═══════════════════════════════════════
+   TOOLBAR ACTIONS
+═══════════════════════════════════════ */
+/* ═══════════════════════════════════════
+   RIGHT DRAWER ACTIONS
+═══════════════════════════════════════ */
+btnSave.addEventListener('click', saveNote);
+
+btnCopy.addEventListener('click', () => {
+  const text = transcript.value.trim();
+  if (!text) { showToast('No hay texto para copiar.'); return; }
+  navigator.clipboard.writeText(text).then(() => {
+    copyFeedback.classList.add('drawer__copy-feedback--visible');
+    setTimeout(() => copyFeedback.classList.remove('drawer__copy-feedback--visible'), 2000);
+  });
+});
+
+btnClear.addEventListener('click', () => {
+  if (isRecording) stopRecording();
+  clearEditor();
+  renderNotes();
+  renderNotesMobile();
+  closeAllDrawers();
+});
+
+document.querySelectorAll('.drawer__export-opt').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const fmt   = btn.getAttribute('data-fmt');
+    const text  = transcript.value.trim();
+    if (!text) { showToast('No hay texto para exportar.'); return; }
+    const titleVal = noteTitle.value.trim() || 'nota';
+    const filename = titleVal.replace(/\s+/g, '-').toLowerCase();
+    let fileContent, mimeType;
+    if (fmt === 'md') {
+      fileContent = `# ${titleVal}\n\n${text}`;
+      mimeType = 'text/plain;charset=utf-8';
+    } else if (fmt === 'json') {
+      fileContent = JSON.stringify({ title: titleVal, text, exportedAt: new Date().toISOString(), id: activeNoteId || null }, null, 2);
+      mimeType = 'application/json;charset=utf-8';
+    } else {
+      fileContent = text;
+      mimeType = 'text/plain;charset=utf-8';
+    }
+    const blob = new Blob([fileContent], { type: mimeType });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = `${filename}.${fmt}`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast(`Exportado como .${fmt} ✓`);
+  });
+});
+
+/* ═══════════════════════════════════════
+   TOAST
+═══════════════════════════════════════ */
+function showToast(msg, dur = 2400) {
+  toastEl.textContent = msg;
+  toastEl.classList.add('toast--visible');
+  setTimeout(() => toastEl.classList.remove('toast--visible'), dur);
+}
+
+/* SW + manifest registrados via inline blob — ver script al final del body */
+
+/* ═══════════════════════════════════════
+   PWA — Install prompt
+═══════════════════════════════════════ */
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  // Show banner only if not dismissed before
+  if (!localStorage.getItem('voznota_pwa_dismissed')) {
+    pwaBanner.classList.add('pwa-banner--visible');
+  }
+});
+
+btnInstall.addEventListener('click', async () => {
+  if (!deferredInstallPrompt) return;
+  deferredInstallPrompt.prompt();
+  const { outcome } = await deferredInstallPrompt.userChoice;
+  if (outcome === 'accepted') showToast('¡VozNota instalada! 🎉');
+  deferredInstallPrompt = null;
+  pwaBanner.classList.remove('pwa-banner--visible');
+});
+
+btnInstallDismiss.addEventListener('click', () => {
+  pwaBanner.classList.remove('pwa-banner--visible');
+  localStorage.setItem('voznota_pwa_dismissed', '1');
+});
+
+window.addEventListener('appinstalled', () => {
+  pwaBanner.classList.remove('pwa-banner--visible');
+  showToast('¡VozNota instalada con éxito! 🎉');
+});
+
+/* ═══════════════════════════════════════
+   OFFLINE / ONLINE DETECTION
+═══════════════════════════════════════ */
+function updateOnlineStatus() {
+  offlineIndicator.classList.toggle('offline-indicator--visible', !navigator.onLine);
+}
+
+window.addEventListener('online',  updateOnlineStatus);
+window.addEventListener('offline', updateOnlineStatus);
+updateOnlineStatus();
+
+/* ═══════════════════════════════════════
+   INIT
+═══════════════════════════════════════ */
+renderNotes(); renderNotesMobile();
+window.addEventListener('resize', drawIdle);
+</script>
+
+<script>
+/* ═══════════════════════════════════════
+   PWA INLINE — Service Worker + Manifest via Blob URLs
+   (Works in single-file / iframe deployments)
+═══════════════════════════════════════ */
+(function() {
+  /* ── 1. Inline manifest as Blob ── */
+  const manifestData = {
+    name: "VozNota — Anotador de Audio",
+    short_name: "VozNota",
+    description: "Graba, transcribe y organiza tus notas de voz.",
+    start_url: "./",
+    display: "standalone",
+    background_color: "#f5f0e8",
+    theme_color: "#c4501a",
+    lang: "es",
+    icons: [
+      { src: "data:image/png;base64,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", sizes: "192x192", type: "image/png", purpose: "any maskable" },
+      { src: "data:image/png;base64,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", sizes: "512x512", type: "image/png", purpose: "any maskable" }
+    ]
+  };
+  const manifestBlob = new Blob([JSON.stringify(manifestData)], {type: 'application/manifest+json'});
+  const manifestURL  = URL.createObjectURL(manifestBlob);
+  const linkEl = document.querySelector('link[rel="manifest"]');
+  if (linkEl) { linkEl.href = manifestURL; }
+  else {
+    const l = document.createElement('link');
+    l.rel = 'manifest'; l.href = manifestURL;
+    document.head.appendChild(l);
+  }
+
+  /* ── 2. Inline Service Worker as Blob ── */
+  const swCode = `
+const CACHE_NAME = 'voznota-v1.0.0';
+const FONT_CACHE = 'voznota-fonts-v1';
+
+self.addEventListener('install', event => {
+  event.waitUntil(
+    caches.open(CACHE_NAME)
+      .then(cache => cache.addAll([]))
+      .then(() => self.skipWaiting())
+  );
+});
+
+self.addEventListener('activate', event => {
+  event.waitUntil(
+    caches.keys().then(names =>
+      Promise.all(names.filter(n => n !== CACHE_NAME && n !== FONT_CACHE).map(n => caches.delete(n)))
+    ).then(() => self.clients.claim())
+  );
+});
+
+self.addEventListener('fetch', event => {
+  const url = new URL(event.request.url);
+  if (event.request.method !== 'GET') return;
+  if (url.protocol === 'blob:' || url.protocol === 'chrome-extension:') return;
+
+  if (url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com') {
+    event.respondWith(
+      caches.open(FONT_CACHE).then(cache =>
+        cache.match(event.request).then(cached => {
+          if (cached) return cached;
+          return fetch(event.request).then(resp => {
+            if (resp && resp.status === 200) cache.put(event.request, resp.clone());
+            return resp;
+          }).catch(() => cached || new Response('', {status: 503}));
+        })
+      )
+    );
+    return;
+  }
+
+  event.respondWith(
+    caches.match(event.request).then(cached => {
+      const fetchPromise = fetch(event.request).then(resp => {
+        if (resp && resp.status === 200 && resp.type !== 'opaque') {
+          caches.open(CACHE_NAME).then(c => c.put(event.request, resp.clone()));
+        }
+        return resp;
+      }).catch(() => cached || new Response('Sin conexión', {status: 503, headers:{'Content-Type':'text/plain;charset=utf-8'}}));
+      return cached || fetchPromise;
+    })
+  );
+});
+
+self.addEventListener('message', event => {
+  if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
+});
+`;
+
+  if ('serviceWorker' in navigator) {
+    const swBlob = new Blob([swCode], { type: 'text/javascript' });
+    const swURL  = URL.createObjectURL(swBlob);
+
+    navigator.serviceWorker.register(swURL, { scope: './' })
+      .then(reg => {
+        console.log('[VozNota] SW registrado (inline blob)');
+        reg.addEventListener('updatefound', () => {
+          const w = reg.installing;
+          w.addEventListener('statechange', () => {
+            if (w.state === 'installed' && navigator.serviceWorker.controller) {
+              if (typeof showToast === 'function')
+                showToast('Nueva versión disponible. Recarga para actualizar.', 5000);
+            }
+          });
+        });
+      })
+      .catch(err => console.warn('[VozNota] SW no disponible en este contexto:', err.message));
+  }
+
+  /* ── 3. Apple touch icon inline ── */
+  const appleIcon = document.querySelector('link[rel="apple-touch-icon"]');
+  if (appleIcon) appleIcon.href = 'data:image/png;base64,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';
+})();
+</script>
+
+</body>
+</html>

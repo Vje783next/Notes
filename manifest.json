@@ -1,0 +1,37 @@
+{
+  "name": "VozNota — Anotador de Audio",
+  "short_name": "VozNota",
+  "description": "Graba, transcribe y organiza tus notas de voz con ayuda de IA.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f5f0e8",
+  "theme_color": "#c4501a",
+  "lang": "es",
+  "categories": ["productivity", "utilities"],
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "Nueva nota",
+      "short_name": "Grabar",
+      "description": "Inicia una nueva grabación",
+      "url": "./index.html?action=record",
+      "icons": [{ "src": "icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}
