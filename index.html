@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es" data-theme="light">
+<html lang="es" data-theme="dark">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -22,26 +22,26 @@
        DESIGN TOKENS
     ============================================================ */
     :root {
-      /* ── Blue palette — light ── */
-      --c-bg:          #f0f4ff;       /* page background */
-      --c-surface:     #ffffff;       /* cards, sidebars */
-      --c-surface-alt: #e8eeff;       /* hover/alt rows */
-      --c-border:      rgba(37,99,235,0.15);
-      --c-shadow:      rgba(37,99,235,0.12);
-      --c-overlay:     rgba(15,23,85,0.45);
+      /* ── Blue palette — dark only ── */
+      --c-bg:          #0a0e2a;
+      --c-surface:     #111535;
+      --c-surface-alt: #1a2050;
+      --c-border:      rgba(99,149,255,0.12);
+      --c-shadow:      rgba(0,0,0,0.5);
+      --c-overlay:     rgba(0,0,10,0.65);
 
-      --c-ink:         #0f1755;       /* primary text */
-      --c-muted:       #5b6fa8;       /* secondary text */
+      --c-ink:         #e2e8ff;
+      --c-muted:       #7b8ec8;
 
-      --c-blue:        #2563eb;       /* primary accent */
-      --c-blue-dim:    #1d4ed8;
-      --c-blue-light:  #bfdbfe;
-      --c-cyan:        #06b6d4;       /* secondary accent */
-      --c-indigo:      #4f46e5;       /* tertiary */
-      --c-green:       #10b981;       /* success */
+      --c-blue:        #4f8fff;
+      --c-blue-dim:    #3b7fe8;
+      --c-blue-light:  #1e3a6e;
+      --c-cyan:        #22d3ee;
+      --c-indigo:      #818cf8;
+      --c-green:       #34d399;
 
-      --c-record:      #e11d48;       /* record button */
-      --c-record-ring: rgba(225,29,72,0.35);
+      --c-record:      #fb7185;
+      --c-record-ring: rgba(251,113,133,0.35);
 
       /* ── Typography ── */
       --font-serif: 'DM Serif Display', serif;
@@ -67,27 +67,7 @@
       --t-slow:  0.3s cubic-bezier(.4,0,.2,1);
     }
 
-    [data-theme="dark"] {
-      --c-bg:          #0a0e2a;
-      --c-surface:     #111535;
-      --c-surface-alt: #1a2050;
-      --c-border:      rgba(99,149,255,0.12);
-      --c-shadow:      rgba(0,0,0,0.5);
-      --c-overlay:     rgba(0,0,10,0.65);
-
-      --c-ink:         #e2e8ff;
-      --c-muted:       #7b8ec8;
-
-      --c-blue:        #4f8fff;
-      --c-blue-dim:    #3b7fe8;
-      --c-blue-light:  #1e3a6e;
-      --c-cyan:        #22d3ee;
-      --c-indigo:      #818cf8;
-      --c-green:       #34d399;
-
-      --c-record:      #fb7185;
-      --c-record-ring: rgba(251,113,133,0.35);
-    }
+    /* base styles below */
 
     /* ============================================================
        BASE
@@ -136,9 +116,9 @@
     ============================================================ */
     .header {
       grid-area: header;
-      display: flex;
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
       align-items: center;
-      justify-content: space-between;
       padding: 0 var(--sp-6);
       background: var(--c-surface);
       border-bottom: 1.5px solid var(--c-border);
@@ -151,6 +131,21 @@
       display: flex;
       align-items: center;
       gap: var(--sp-3);
+      justify-content: flex-start;
+    }
+
+    .header__center {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+    }
+
+    .header__right {
+      display: flex;
+      align-items: center;
+      gap: var(--sp-3);
+      justify-content: flex-end;
     }
 
     .header__toggle {
@@ -910,14 +905,13 @@
   <header class="header">
     <div class="header__left">
       <button class="header__toggle" id="btnToggle" title="Notas">☰</button>
-      <div>
-        <div class="header__logo">Voz<em>Nota</em></div>
-        <div class="header__tagline">Anotador de audio</div>
-      </div>
+    </div>
+    <div class="header__center">
+      <div class="header__logo">Voz<em>Nota</em></div>
+      <div class="header__tagline">Anotador de audio</div>
     </div>
     <div class="header__right">
       <div class="header__offline" id="offlineIndicator">Sin conexión</div>
-      <button class="header__theme-btn" id="btnTheme">🌙</button>
     </div>
   </header>
 
@@ -1036,7 +1030,7 @@
 
 <!-- ══ MOBILE BOTTOM BAR ══ -->
 <div class="mobile-bar" id="mobileBar">
-  <button class="mobile-bar__nav-btn" id="btnMobileSave" title="Acciones">⚙ Acciones</button>
+  <button class="mobile-bar__nav-btn" id="btnMobileSave" title="Acciones">⚙</button>
 </div>
 
 <!-- ══ PWA INSTALL BANNER ══ -->
@@ -1115,22 +1109,13 @@ const btnDrawerRightClose = document.getElementById('btnDrawerRightClose');
 const btnActionsTab   = document.getElementById('btnActionsTab');
 
 /* ═══════════════════════════════════════
-   1. THEME
+   1. THEME — dark only
 ═══════════════════════════════════════ */
 function applyTheme(t) {
-  document.documentElement.setAttribute('data-theme', t);
-  btnTheme.textContent = t === 'dark' ? '☀️ Claro' : '🌙 Oscuro';
-  localStorage.setItem('voznota_theme', t);
+  document.documentElement.setAttribute('data-theme', 'dark');
   drawIdle();
 }
-
-btnTheme.addEventListener('click', () => {
-  applyTheme(
-    document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'
-  );
-});
-
-applyTheme(localStorage.getItem('voznota_theme') || 'light');
+applyTheme('dark');
 
 /* ═══════════════════════════════════════
    2. DRAWERS — left (notes) & right (actions)
@@ -1346,7 +1331,7 @@ async function startRecording() {
     mediaRecorder.start(100);
 
     finalTranscript = transcript.value;
-    recognition = initRecognition();
+    recognition = isMobile() ? null : initRecognition();
     if (recognition) recognition.start();
 
     startTime     = Date.now() - pausedTime;
